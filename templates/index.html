@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Processing App</title>
+</head>
+<body>
+
+<h1>Video Processing App</h1>
+
+<h2>1. Extract frames every 0.5 seconds, and save points</h2>
+<form action="/extract_frames" method="post" enctype="multipart/form-data">
+    <input type="file" name="video" required>
+    <button type="submit">Extract Frames</button>
+</form>
+
+<hr>
+
+<h2>2. MediaPipe Hand Landmarks comaprison</h2>
+<form action="/hand_landmarks" method="post" enctype="multipart/form-data">
+    <input type="file" name="video" required>
+    <button type="submit">Detect Hand Landmarks and compare with targets</button>
+</form>
+
+</body>
+</html>
