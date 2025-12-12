@@ -103,44 +103,67 @@ def hand_landmarks():
                 break
             
             if frame_id % 2  == 0: 
+            #if True:
                 frame = auto_rotate_frame(frame, exif_orientation=8) 
+                #frame = cv2.resize(frame, (512, 512))
                 vec = get_normilised_3d_points(frame, landmarker)
                 if vec.shape != (21,3):
                     print('empty frame', frame_id)
+                    continue
     
-            _, _, disparity_1 = procrustes(vec, template)
+                _, _, disparity_1 = procrustes(vec, template)
 
-            p2p, _ = p2p_distance(vec, template)
-            p2p = round(p2p, 3)
-            disparity_1 = round(disparity_1,3)
-            if p2p < 0.25 and disparity_1 < 0.1:
-                templ_img = cv2.imread(f'frames/frame_{template_ind}.jpg')
-                cv2.putText(templ_img, f"TEMPLATE {template_ind}",
-                             (110, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                res_img = np.concatenate([templ_img, frame], 1)
-                res_img = cv2.resize(res_img, (512, 512)) 
-                cv2.putText(res_img, f"P2P dist {p2p}",
-                             (110, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                cv2.putText(res_img, f"Procrust dist {disparity_1}",
-                             (110, 330), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                p2p, dist = p2p_distance(vec, template)
+                max_p2p_dist = np.amax(dist)
+                p2p = round(p2p, 3)
+                disparity_1 = round(disparity_1,3)
+                print(max_p2p_dist, p2p, disparity_1)
+                if max_p2p_dist < 0.37 and disparity_1 < 0.03:
+                    templ_img = cv2.imread(f'frames/frame_{template_ind}.jpg')
+                    #templ_img = cv2.resize(templ_img, (512, 512))
+                    cv2.putText(templ_img, f"TEMPLATE {template_ind}",
+                                (110, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    res_img = np.concatenate([templ_img, frame], 1)
+                    res_img = cv2.resize(res_img, (512, 512)) 
+                    cv2.putText(res_img, f"P2P max dist {max_p2p_dist}",
+                                (110, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    cv2.putText(res_img, f"Procrust dist {disparity_1}",
+                                (110, 330), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-                cv2.imwrite(f'match/Match-{template_ind}.jpg', res_img)
+                    cv2.imwrite(f'match/Match-{template_ind}.jpg', res_img)
 
-                print(f'Match {template_ind}')
-                results_all.append({'frame_id': frame_id,
-                                    'p2p':p2p,
-                                    'procruste_dist': disparity_1 })
-                template_ind +=1
-                if template_ind < len(targets):
-                    template = targets[template_ind]
-                else:
-                    print('Full match')
-                    break
+                    print(f'Match {template_ind}')
+                    results_all.append({'frame_id': frame_id,
+                                        'p2p':p2p,
+                                        'procruste_dist': disparity_1 })
+                    template_ind +=1
+                    if template_ind < len(targets):
+                        template = targets[template_ind]
+                    else:
+                        print('Full match')
+                        break
 
             frame_id += 1
 
     cap.release()
-    return jsonify(results_all)
+    targ_len = len(targets)
+    res_len = len(results_all)
+    if targ_len == res_len:
+        return f"""s<h2>Full match. \
+        Registerd gestures num {targ_len}, detected num {res_len} \n Matched frames in folder MATCH </h2> \
+        <form action="/" method="get"> \
+            <button type="submit">Home</button>
+        </form>
+        """
+    else:
+
+        #return jsonify(results_all)
+        return f"""<h2>NOT matched. Registerd gestures num {targ_len}, detected num {res_len}</h2> 
+        <form action="/" method="get"> \
+            <button type="submit">Home</button>
+        </form>
+        """
+        
 
 
 if __name__ == "__main__":
