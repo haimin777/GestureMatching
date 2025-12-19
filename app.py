@@ -5,7 +5,7 @@ import os
 import numpy as np
 import time
 import mediapipe as mp
-from utils import options, auto_rotate_frame, get_normilised_3d_points, p2p_distance
+from utils import options, auto_rotate_frame, get_normilised_3d_points, p2p_distance, p2p_distance_fingers
 import mediapipe as mp
 from scipy.spatial import procrustes
 
@@ -16,6 +16,8 @@ HandLandmarker = mp.tasks.vision.HandLandmarker
 app = Flask(__name__)
 UPLOAD_FOLDER = "uploads"
 FRAME_FOLDER = "frames"
+FINGERTIP_IDS = [4, 8, 12, 16, 20]
+
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(FRAME_FOLDER, exist_ok=True)
@@ -97,6 +99,14 @@ def hand_landmarks():
                         min_tracking_confidence=0.5) as hands:
 
         frame_id = 0
+        finger_1_points = [0, 1, 2, 3, 4]
+        finger_2_points = [0, 5, 6, 7, 8]
+        finger_3_points = [0, 9, 10, 11, 12]
+        finger_4_points = [0, 13, 14, 15, 16]
+        finger_5_points = [0, 17, 18, 19, 20]
+
+
+
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -111,14 +121,40 @@ def hand_landmarks():
                     print('empty frame', frame_id)
                     continue
     
-                _, _, disparity_1 = procrustes(vec, template)
+                #_, _, disparity_1 = procrustes(vec, template)
+                fing_1_vec = [vec[i] for i in finger_1_points]
+                fing_1_template = [template[i] for i in finger_1_points]
+
+                fing_2_vec = [vec[i] for i in finger_2_points]
+                fing_2_template = [template[i] for i in finger_2_points]
+
+                fing_3_vec = [vec[i] for i in finger_3_points]
+                fing_3_template = [template[i] for i in finger_3_points]
+
+                fing_4_vec = [vec[i] for i in finger_4_points]
+                fing_4_template = [template[i] for i in finger_4_points]
+
+                fing_5_vec = [vec[i] for i in finger_5_points]
+                fing_5_template = [template[i] for i in finger_5_points]
+
+                _, _, disparity_1 = procrustes(fing_1_vec, fing_1_template)
+                _, _, disparity_2 = procrustes(fing_2_vec, fing_2_template)
+                _, _, disparity_3 = procrustes(fing_3_vec, fing_3_template)
+                _, _, disparity_4 = procrustes(fing_4_vec, fing_4_template)
+                _, _, disparity_5 = procrustes(fing_5_vec, fing_5_template)
 
                 p2p, dist = p2p_distance(vec, template)
+                #p2p, dist = p2p_distance_fingers(vec, template)
                 max_p2p_dist = np.amax(dist)
-                p2p = round(p2p, 3)
-                disparity_1 = round(disparity_1,3)
-                print(max_p2p_dist, p2p, disparity_1)
-                if max_p2p_dist < 0.37 and disparity_1 < 0.03:
+                p2p = round(p2p, 4)
+                disparity_1 = round(disparity_1, 4)
+                disparity_2 = round(disparity_2, 4)
+                print(max_p2p_dist, p2p, disparity_1, disparity_2)
+                if max(disparity_1,
+                        disparity_2,
+                        disparity_3,
+                        disparity_4,
+                        disparity_5) < 0.02:
                     templ_img = cv2.imread(f'frames/frame_{template_ind}.jpg')
                     #templ_img = cv2.resize(templ_img, (512, 512))
                     cv2.putText(templ_img, f"TEMPLATE {template_ind}",
@@ -126,9 +162,15 @@ def hand_landmarks():
                     res_img = np.concatenate([templ_img, frame], 1)
                     res_img = cv2.resize(res_img, (512, 512)) 
                     cv2.putText(res_img, f"P2P max dist {max_p2p_dist}",
-                                (110, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                    cv2.putText(res_img, f"Procrust dist {disparity_1}",
-                                (110, 330), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                                (70, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    cv2.putText(res_img, f"Procrust dist fing1 {disparity_1}",
+                                (70, 330), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    cv2.putText(res_img, f"Procrust dist fing2 {disparity_2}",
+                                (70, 360), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    cv2.putText(res_img, f"Procrust dist fing3 {disparity_3}",
+                                (70, 390), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    cv2.putText(res_img, f"p2p aver {p2p}",
+                                (70, 430), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
                     cv2.imwrite(f'match/Match-{template_ind}.jpg', res_img)
 

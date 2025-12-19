@@ -7,6 +7,8 @@ BaseOptions = mp.tasks.BaseOptions
 HandLandmarker = mp.tasks.vision.HandLandmarker
 HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
 VisionRunningMode = mp.tasks.vision.RunningMode
+FINGERTIP_IDS = [4, 8, 12, 16, 20]
+
 
 options = HandLandmarkerOptions(
     base_options=BaseOptions(
@@ -47,9 +49,25 @@ def get_normilised_3d_points(image, landmarker):
     wrist = pts[0]
     pts = pts - wrist
 
+    # 2. Align middle-finger direction (wrist → middle tip = landmark 12) to +Y axis
+    middle_dir = pts[12]  # wrist → middle fingertip
+    middle_dir /= np.linalg.norm(middle_dir) + 1e-8
+
+    # Build rotation matrix: middle finger → [0,1,0]
+    y_axis = np.array([0., 1., 0.])
+    v = np.cross(middle_dir, y_axis)
+    c = np.dot(middle_dir, y_axis)
+    if abs(c - 1) < 1e-6:  # already aligned
+        R = np.eye(3)
+    else:
+        s = np.linalg.norm(v)
+        vx = np.array([[0, -v[2], v[1]],
+                       [v[2], 0, -v[0]],
+                       [-v[1], v[0], 0]])
+        R = np.eye(3) + vx + vx @ vx * (1 - c) / (s * s)  # Rodrigues formula
 
     # 3. Apply rotation + scale by distance 0→5
-    pts_rot = pts# @ R.T
+    pts_rot = pts @ R.T
     scale = np.linalg.norm(pts[5]) + 1e-8
     pts_norm = pts_rot / scale
 
@@ -65,6 +83,23 @@ def p2p_distance(gesture1, gesture2):
 
     # Euclidean distance per keypoint
     dists = np.linalg.norm(g1 - g2, axis=1)
+    weights = np.ones(21)
+    weights[FINGERTIP_IDS] = 2.0
 
-    return np.mean(dists), dists  # (mean distance, per-point distances)    
+    #return np.mean(dists), dists  # (mean distance, per-point distances)    
+    return np.average(dists, weights=weights), dists
+
+def p2p_distance_fingers(gesture1, gesture2):
+    """
+    Computes average point-to-point Euclidean distance between 2 gestures.
+    gesture1, gesture2: (21,3)
+    """
+    g1 = np.array(gesture1)
+    g2 = np.array(gesture2)
+
+    # Euclidean distance per keypoint
+    dists = np.linalg.norm(g1 - g2, axis=1)
+    fing_1 = [dists[i] for i in [0, 1, 2, 3, 4]]
+
+    return np.mean(fing_1), fing_1  # (mean distance, per-point distances)    
     
