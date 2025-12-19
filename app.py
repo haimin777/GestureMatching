@@ -6,6 +6,7 @@ import numpy as np
 import time
 import mediapipe as mp
 from utils import options, auto_rotate_frame, get_normilised_3d_points, p2p_distance, p2p_distance_fingers
+from utils import register_gesture, match_gestures
 import mediapipe as mp
 from scipy.spatial import procrustes
 
@@ -41,41 +42,8 @@ def extract_frames():
     filename = os.path.join(UPLOAD_FOLDER, video.filename)
     video.save(filename)
 
-   
-
-    cap = cv2.VideoCapture(filename)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_interval = int(fps * 0.5)  # frames per 0.5s
-
-    count = 0
-    saved = 0
-    targets = []
-    # clear folder
-    [os.remove(p) for p in glob.glob('frames/*')]
-
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        
-        if count % frame_interval == 0:
-            frame = auto_rotate_frame(frame, exif_orientation=8)   # 8 = 90° left (most common for phones)
-            out_path = os.path.join(FRAME_FOLDER, f"frame_{saved}.jpg")
-            #vec, image, draw_data = get_rotation_invariant_vector(frame)
-            normalized = get_normilised_3d_points(frame, landmarker)
-            if normalized.shape == (21, 3):
-                targets.append(normalized)
-                saved += 1
-                cv2.imwrite(out_path, frame)
-                print('saved')
-
-        count += 1
-
-    cap.release()
-
-    np.save('target.npy', targets)
-    return f"Saved {saved} frames to folder '{FRAME_FOLDER}'"
+    registered_gestures_num = register_gesture(filename, landmarker)
+    return f"Saved {registered_gestures_num} frames to folder '{FRAME_FOLDER}'"
 
 
 # ----------------------------------------------------------
@@ -87,109 +55,12 @@ def hand_landmarks():
     filename = os.path.join(UPLOAD_FOLDER, video.filename)
     video.save(filename)
     targets = np.load('target.npy')
-    template_ind = 0
-    template = targets[template_ind]
+    #template_ind = 0
+    #template = targets[template_ind]
     [os.remove(p) for p in glob.glob('match/*')]
-    cap = cv2.VideoCapture(filename)
-    results_all = []
-
-    with mp_hands.Hands(static_image_mode=False,
-                        max_num_hands=2,
-                        min_detection_confidence=0.5,
-                        min_tracking_confidence=0.5) as hands:
-
-        frame_id = 0
-        finger_1_points = [0, 1, 2, 3, 4]
-        finger_2_points = [0, 5, 6, 7, 8]
-        finger_3_points = [0, 9, 10, 11, 12]
-        finger_4_points = [0, 13, 14, 15, 16]
-        finger_5_points = [0, 17, 18, 19, 20]
-
-
-
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            if frame_id % 2  == 0: 
-            #if True:
-                frame = auto_rotate_frame(frame, exif_orientation=8) 
-                #frame = cv2.resize(frame, (512, 512))
-                vec = get_normilised_3d_points(frame, landmarker)
-                if vec.shape != (21,3):
-                    print('empty frame', frame_id)
-                    continue
     
-                #_, _, disparity_1 = procrustes(vec, template)
-                fing_1_vec = [vec[i] for i in finger_1_points]
-                fing_1_template = [template[i] for i in finger_1_points]
+    targ_len, res_len = match_gestures(filename, landmarker, targets)
 
-                fing_2_vec = [vec[i] for i in finger_2_points]
-                fing_2_template = [template[i] for i in finger_2_points]
-
-                fing_3_vec = [vec[i] for i in finger_3_points]
-                fing_3_template = [template[i] for i in finger_3_points]
-
-                fing_4_vec = [vec[i] for i in finger_4_points]
-                fing_4_template = [template[i] for i in finger_4_points]
-
-                fing_5_vec = [vec[i] for i in finger_5_points]
-                fing_5_template = [template[i] for i in finger_5_points]
-
-                _, _, disparity_1 = procrustes(fing_1_vec, fing_1_template)
-                _, _, disparity_2 = procrustes(fing_2_vec, fing_2_template)
-                _, _, disparity_3 = procrustes(fing_3_vec, fing_3_template)
-                _, _, disparity_4 = procrustes(fing_4_vec, fing_4_template)
-                _, _, disparity_5 = procrustes(fing_5_vec, fing_5_template)
-
-                p2p, dist = p2p_distance(vec, template)
-                #p2p, dist = p2p_distance_fingers(vec, template)
-                max_p2p_dist = np.amax(dist)
-                p2p = round(p2p, 4)
-                disparity_1 = round(disparity_1, 4)
-                disparity_2 = round(disparity_2, 4)
-                print(max_p2p_dist, p2p, disparity_1, disparity_2)
-                if max(disparity_1,
-                        disparity_2,
-                        disparity_3,
-                        disparity_4,
-                        disparity_5) < 0.02:
-                    templ_img = cv2.imread(f'frames/frame_{template_ind}.jpg')
-                    #templ_img = cv2.resize(templ_img, (512, 512))
-                    cv2.putText(templ_img, f"TEMPLATE {template_ind}",
-                                (110, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                    res_img = np.concatenate([templ_img, frame], 1)
-                    res_img = cv2.resize(res_img, (512, 512)) 
-                    cv2.putText(res_img, f"P2P max dist {max_p2p_dist}",
-                                (70, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                    cv2.putText(res_img, f"Procrust dist fing1 {disparity_1}",
-                                (70, 330), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                    cv2.putText(res_img, f"Procrust dist fing2 {disparity_2}",
-                                (70, 360), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                    cv2.putText(res_img, f"Procrust dist fing3 {disparity_3}",
-                                (70, 390), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                    cv2.putText(res_img, f"p2p aver {p2p}",
-                                (70, 430), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-                    cv2.imwrite(f'match/Match-{template_ind}.jpg', res_img)
-
-                    print(f'Match {template_ind}')
-                    results_all.append({'frame_id': frame_id,
-                                        'p2p':p2p,
-                                        'procruste_dist': disparity_1 })
-                    template_ind +=1
-                    if template_ind < len(targets):
-                        template = targets[template_ind]
-                    else:
-                        print('Full match')
-                        break
-
-            frame_id += 1
-
-    cap.release()
-    targ_len = len(targets)
-    res_len = len(results_all)
     if targ_len == res_len:
         return f"""s<h2>Full match. \
         Registerd gestures num {targ_len}, detected num {res_len} \n Matched frames in folder MATCH </h2> \
@@ -206,6 +77,97 @@ def hand_landmarks():
         </form>
         """
         
+
+@app.route("/record_video", methods=["POST"])
+def record_video():
+    output_path = os.path.join(UPLOAD_FOLDER, "recorded_5s.mp4")
+
+    cap = cv2.VideoCapture(0)  # 0 = laptop camera
+
+    if not cap.isOpened():
+        return "Cannot open camera"
+
+    fps = 20.0
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+    start_time = time.time()
+
+    while time.time() - start_time < 5:  # record 5 seconds
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        out.write(frame)
+
+    cap.release()
+    out.release()
+    # register gestures from saved video
+    [os.remove(p) for p in glob.glob('match/*')]
+
+    registered_gestures_num = register_gesture(output_path, landmarker)
+    
+
+    return f"""
+    <h2>Recording finished!</h2>
+    <p>Saved video: recorded_5s.mp4</p>
+    <p>Saved gestures: {registered_gestures_num}</p>
+
+    <form action="/" method="get">
+        <button type="submit">Home</button>
+    </form>
+    """
+
+@app.route("/match_video", methods=["POST"])
+def match_video():
+    output_path = os.path.join(UPLOAD_FOLDER, "recorded_5s_for_match.mp4")
+
+    cap = cv2.VideoCapture(0)  # 0 = laptop camera
+
+    if not cap.isOpened():
+        return "Cannot open camera"
+
+    fps = 20.0
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+    start_time = time.time()
+
+    while time.time() - start_time < 5:  # record 5 seconds
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        out.write(frame)
+
+    cap.release()
+    out.release()
+    # Match gestures from saved video
+    targets = np.load('target.npy')
+    [os.remove(p) for p in glob.glob('match/*')]
+    targ_len, res_len = match_gestures(output_path, landmarker, targets)
+
+    if targ_len == res_len:
+        return f"""s<h2>Full match. \
+        Registerd gestures num {targ_len}, detected num {res_len} \n Matched frames in folder MATCH </h2> \
+        <form action="/" method="get"> \
+            <button type="submit">Home</button>
+        </form>
+        """
+    else:
+
+        #return jsonify(results_all)
+        return f"""<h2>NOT matched. Registerd gestures num {targ_len}, detected num {res_len}</h2> 
+        <form action="/" method="get"> \
+            <button type="submit">Home</button>
+        </form>
+        """
 
 
 if __name__ == "__main__":

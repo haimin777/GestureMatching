@@ -13,12 +13,22 @@
     <button type="submit">Register gestures</button>
 </form>
 
+<h2>1.1. Register gesture from camera</h2>
+<form action="/record_video" method="post">
+    <button type="submit">Register 5s gesture</button>
+</form>
+
 <hr>
 
 <h2>2. MediaPipe Hand Landmarks comaprison</h2>
 <form action="/hand_landmarks" method="post" enctype="multipart/form-data">
     <input type="file" name="video" required>
     <button type="submit">Detect Hand Landmarks and compare with targets</button>
+</form>
+
+<h2>2.1. Match gesture from camera</h2>
+<form action="/match_video" method="post">
+    <button type="submit">Match 5s gesture video</button>
 </form>
 
 </body>

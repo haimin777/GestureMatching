@@ -63,6 +63,7 @@ db.sqlite3-journal
 *.npy
 *.jpg
 *.mp4
+*.csv
 
 # Flask stuff:
 instance/
