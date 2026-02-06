@@ -45,6 +45,7 @@ def get_normilised_3d_points(image, landmarker):
 
     result = landmarker.detect(mp.Image(data=rgb, image_format=mp.ImageFormat.SRGB))
     if not result.hand_landmarks:
+        print('no hands detected! \n')
         return np.array([0])
 
     lm = result.hand_landmarks[0]                     # first hand only
@@ -91,11 +92,13 @@ def p2p_distance(gesture1, gesture2):
 
     # Euclidean distance per keypoint
     dists = np.linalg.norm(g1 - g2, axis=1)
-    weights = np.ones(21)
-    weights[FINGERTIP_IDS] = 2.0
+    weights = np.ones(4)
+    #weights[FINGERTIP_IDS] = 2.0
+    weights[-1] = 2.0
 
     #return np.mean(dists), dists  # (mean distance, per-point distances)    
-    return np.average(dists, weights=weights), dists
+    #return np.average(dists, weights=weights), dists
+    return None,  np.average(dists, weights=weights)
 
 def p2p_distance_fingers(gesture1, gesture2):
     """
@@ -264,4 +267,114 @@ def match_gestures(filename, landmarker, targets):
     debug_logs = pd.DataFrame(results_debug)
     debug_logs.to_csv('debug_logs.csv', index=None)
     return targ_len, res_len
+
+def compare_frames(frame_1_path:str, frame_2_path:str, landmarker):
+    '''
+    finger_1_points = [0, 1, 2, 3, 4]
+    finger_2_points = [0, 5, 6, 7, 8]
+    finger_3_points = [0, 9, 10, 11, 12]
+    finger_4_points = [0, 13, 14, 15, 16]
+    finger_5_points = [0, 17, 18, 19, 20]
+    '''
+    # reduce points number for robustness
+    finger_1_points = [0, 2, 3, 4]
+    finger_2_points = [0, 6, 7, 8]
+    finger_3_points = [0, 10, 11, 12]
+    finger_4_points = [0, 14, 15, 16]
+    finger_5_points = [0, 18, 19, 20]
+
+
+    vec_1 = get_normilised_3d_points(frame_1_path, landmarker)
+    #print(frame_1_path, vec_1.shape)
+    vec_2 = get_normilised_3d_points(frame_2_path, landmarker)
+    #print(frame_2_path, vec_2.shape)
+    
+    fing_1_vec_1 = [vec_1[i] for i in finger_1_points]
+    fing_1_vec_2 = [vec_2[i] for i in finger_1_points]
+
+    fing_2_vec_1 = [vec_1[i] for i in finger_2_points]
+    fing_2_vec_2 = [vec_2[i] for i in finger_2_points]
+
+    fing_3_vec_1 = [vec_1[i] for i in finger_3_points]
+    fing_3_vec_2 = [vec_2[i] for i in finger_3_points]
+
+    fing_4_vec_1 = [vec_1[i] for i in finger_4_points]
+    fing_4_vec_2 = [vec_2[i] for i in finger_4_points]
+
+    fing_5_vec_1 = [vec_1[i] for i in finger_5_points]
+    fing_5_vec_2 = [vec_2[i] for i in finger_5_points]
+
+    _, _, disparity_1 = procrustes(fing_1_vec_1, fing_1_vec_2)
+    _, _, disparity_2 = procrustes(fing_2_vec_1, fing_2_vec_2)
+    _, _, disparity_3 = procrustes(fing_3_vec_1, fing_3_vec_2)
+    _, _, disparity_4 = procrustes(fing_4_vec_1, fing_4_vec_2)
+    _, _, disparity_5 = procrustes(fing_5_vec_1, fing_5_vec_2)
+
+    p2p_1, dist_1 = p2p_distance(fing_1_vec_1, fing_1_vec_2)
+    p2p_2, dist_2 = p2p_distance(fing_2_vec_1, fing_2_vec_2)
+    p2p_3, dist_3 = p2p_distance(fing_3_vec_1, fing_3_vec_2)
+    p2p_4, dist_4 = p2p_distance(fing_4_vec_1, fing_4_vec_2)
+    p2p_5, dist_5 = p2p_distance(fing_5_vec_1, fing_5_vec_2)
+
+    
+    # return finger wise procruste distances and average p2p and p2p distances
+    
+    return [disparity_1, #*1.35, 
+            disparity_2,
+            disparity_3,
+            disparity_4,
+            disparity_5], [dist_1,
+                           dist_2,
+                           dist_3,
+                           dist_4,
+                           dist_5]
+    
+def compare_with_keras(procr_dist, model):
+        
+    prediction = model.predict(procr_dist, verbose=0)
+        
+    return prediction
+    
+
+
+def check_frames(paths, landmarker):
+
+    for p in paths:
+
+        vec = get_normilised_3d_points(p, landmarker)
+        print(p, vec.shape)
+        
+def save_pairvise_data(frames_paths, landmarker):
+    
+    distances_p, labels = [], []
+    '''
+    dataset structure: procruste_1, procruste_2, label)
+    labels: 1- same, 0-different
+    '''
+    n = len(frames_paths)
+    gesture_names = [os.path.basename(p).split('.')[0] for p in frames_paths]
+    for i in range(n):
+        for j in range(n):
+            # You can try different metrics:
+            # dist_matrix[i,j] = euclidean(norm_templates[i], norm_templates[j])
+            label_1 = os.path.basename(frames_paths[i]).split('-')[0]
+            label_2 = os.path.basename(frames_paths[j]).split('-')[0]
+
+            if label_1 == label_2:
+                label = 1 # same gestures
+            else:
+                label = 0    
+
+            procruste, p2p_avg = compare_frames(frames_paths[i],
+                                                           frames_paths[j],
+                                                             landmarker)
+            distances_p.append(procruste)
+            labels.append(label)
+    np.savez_compressed('dataset.npz', x=distances_p, y=labels)    
+    print("saved to dataset.npz")    
+            
+            
+
+
+
     
