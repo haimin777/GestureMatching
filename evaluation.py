@@ -36,8 +36,7 @@ def get_confusion_matrix(frames_paths, model, threshold=0.02):
             procruste, p2p_dist = compare_frames(frames_paths[i],
                                                            frames_paths[j],
                                                              landmarker)
-            #predict = model.predict(np.array(procruste).reshape((1,5)), verbose=0)[0]
-            predict = model.predict(np.array(p2p_dist).reshape((1,5)), verbose=0)[0]
+            predict = model.predict(np.array(procruste).reshape((1,5)), verbose=0)[0]
 
             #if np.amax(procruste) > threshold:
             if predict < 0.5:
@@ -72,11 +71,11 @@ def get_confusion_matrix(frames_paths, model, threshold=0.02):
 if __name__ == "__main__":
 
     #frames_paths = glob.glob('C:\\Work\\gestures\\dataset\\Simple-gestures\\frames\\*jpg')
-    frames_paths = glob.glob('<PATH-TO-DATASET>\\Simple-gestures\\frames\\*jpg')
+    #frames_paths = glob.glob('<PATH-TO-DATASET>\\Simple-gestures\\frames\\*jpg')
 
     HandLandmarker = mp.tasks.vision.HandLandmarker
     landmarker = HandLandmarker.create_from_options(options)
-    model_embedder = load_model('similarity_model.keras')
+    model_embedder = load_model('artefacts/similarity_model-99.38.keras')
     '''
         
     for t in range(1, 20): # procruste
